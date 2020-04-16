@@ -1,5 +1,7 @@
 #!/bin/sh
 
+export GIT_DEPTH=0
+
 if [ -z ${SONAR_URL+x} ]; then
   echo "Undefined \"SONAR_URL\" env" && exit 1
 fi
@@ -10,7 +12,7 @@ COMMAND="sonar-scanner -Dsonar.host.url=$URL"
 
 if ! grep -q sonar.projectKey "sonar-project.properties"; then
   if [ -z ${SONAR_PROJECT_KEY+x} ]; then
-    SONAR_PROJECT_KEY=$CI_PROJECT_NAME
+    SONAR_PROJECT_KEY=${CI_PROJECT_NAMESPACE//\//_}:$CI_PROJECT_NAME
   fi
   COMMAND="$COMMAND -Dsonar.projectKey=$SONAR_PROJECT_KEY"
 fi
@@ -51,34 +53,30 @@ if [ ! -z ${SONAR_ENCODING+x} ]; then
   COMMAND="$COMMAND -Dsonar.sourceEncoding=$SONAR_ENCODING"
 fi
 
-if [ ! -z ${SONAR_BRANCH+x} ]; then
-  COMMAND="$COMMAND -Dsonar.branch.name=$SONAR_BRANCH"
+if [ -z ${SONAR_BRANCH+x} ]; then
+  SONAR_BRANCH=$CI_COMMIT_REF_NAME
 fi
 
 # analysis by default
 if [ -z ${SONAR_ANALYSIS_MODE+x} ]; then
-  SONAR_ANALYSIS_MODE="preview"
+  SONAR_ANALYSIS_MODE="publish"
 fi
 
 COMMAND="$COMMAND -Dsonar.analysis.mode=$SONAR_ANALYSIS_MODE"
-if [ $SONAR_ANALYSIS_MODE == "preview" ]; then
-  COMMAND="$COMMAND -Dsonar.issuesReport.console.enable=true"
-  COMMAND="$COMMAND -Dsonar.gitlab.failure_notification_mode=exit-code"
+COMMAND="$COMMAND -Dsonar.branch.name=$SONAR_BRANCH"
+COMMAND="$COMMAND -Dsonar.issuesReport.console.enable=true"
+COMMAND="$COMMAND -Dsonar.gitlab.failure_notification_mode=exit-code"
 
-  if [ ! -z ${SONAR_GITLAB_PROJECT_ID+x} ]; then
-    COMMAND="$COMMAND -Dsonar.gitlab.project_id=$SONAR_GITLAB_PROJECT_ID"
-  fi
-
-  if [ ! -z ${CI_BUILD_REF+x} ]; then
-    COMMAND="$COMMAND -Dsonar.gitlab.commit_sha=$CI_BUILD_REF"
-  fi
-
-  if [ ! -z ${CI_BUILD_REF_NAME+x} ]; then
-    COMMAND="$COMMAND -Dsonar.gitlab.ref_name=$CI_BUILD_REF_NAME"
-  fi
+if [ ! -z ${CI_PROJECT_PATH+x} ]; then
+COMMAND="$COMMAND -Dsonar.gitlab.project_id=$CI_PROJECT_PATH"
 fi
-if [ $SONAR_ANALYSIS_MODE == "publish" ]; then
-  unset CI_BUILD_REF
+
+if [ ! -z ${CI_BUILD_REF+x} ]; then
+COMMAND="$COMMAND -Dsonar.gitlab.commit_sha=$CI_BUILD_REF"
+fi
+
+if [ ! -z ${CI_BUILD_REF_NAME+x} ]; then
+COMMAND="$COMMAND -Dsonar.gitlab.ref_name=$CI_BUILD_REF_NAME"
 fi
 
 $COMMAND $@
